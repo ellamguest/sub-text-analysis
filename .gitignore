@@ -1,0 +1,12 @@
+credentials.json
+*.txt
+*.pkl
+*.pyc
+*.csv
+*.png
+data/
+moding-data/
+raw-data/
+*.json
+*.ini
+*.csv#
