@@ -15,13 +15,17 @@ from process_text import *
 
 # import data and update manage variables
 def prep_df():
-    df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/raw-data/td_comments_2017_05.csv')
+    #df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/raw-data/td_comments_2017_05.csv')
+    df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/raw-data/td_full_comments_2017_05.csv')
     df['time'] = pd.to_datetime(df['created_utc'], unit='s')
     df.sort_values('time', inplace=True)
     df['rank'] = df.groupby('author')['time'].rank()
-    df['text_len'] = df['body'].map(lambda x:len(x))
+    df['text_len'] = df['body'].map(lambda x:len(str(x)))
     df['author_count'] = df['author'].map(
             df.groupby('author').count()['time'])
+    df['author_avg_score'] = df['author'].map(
+            df.groupby('author').mean()['score'])
+    df['active'] = df.author_count.apply(lambda x: 1 if x > 10 else 0)
     
     mods = pd.read_csv('/Users/emg/Programming/GitHub/mod-timelines/moding-data/td/master.csv')
     df['mod']=df.author.isin(mods['name'].unique()).map({False:0,True:1})
@@ -29,29 +33,29 @@ def prep_df():
     return df
 
 df = prep_df()
+df.to_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/td_full_comments_2017_05.csv')
 
 # create subset by removing inappropraite authors
 subset = df[df.author != '[deleted]']
 subset = subset[subset.author != 'AutoModerator']
-#repeats = subset[subset.groupby('author').author.transform(len) > 1]
 
-# create subset of most active authors
-active = subset[subset['author_count'] > 10]
-inactive = subset[subset['author_count'] <= 10]
+def author_count_score_plot(df, group):
+    plt.scatter(x=df['score'], y=df['author_count'], c=df[group])
+    plt.xlabel('comments score'), plt.ylabel('# comments by author')
+    plt.title('Comment scores by author comment count (y={})'.format(group))
+    plt.ylim(ymin=1)
 
-# there appears to be no difference in scores between active and inactive users
-# even when excluding those with scores of 1
-sp.stats.ttest_ind(active[active['score']>1]['score'],inactive[inactive['score']>1]['score'])
+author_count_score_plot(subset, 'mod')
 
-mods = subset[subset['mod']==1]
-nonmods = subset[subset['mod']==0]
-sp.stats.ttest_ind(mods['author_count'],nonmods['author_count'])
-subset.groupby('mod').plot(x='author_count',y='score')
+def rank_score_plot(df, group):
+    plt.scatter(x=df['rank'], y=df['score'], c=df[group])
+    plt.xlabel('comment rank by author'), plt.ylabel('comment score')
+    plt.title('Comment scores by rank in author comments (y={})'.format(group))
+    plt.ylim(ymin=1)
 
-plt.scatter(x=subset['score'], y=subset['author_count'], c=subset['mod'])
-plt.xlabel('comments score'), plt.ylabel('# comments by author')
-plt.title('Comment scores by author comment count')
-plt.ylim(ymin=1)
+rank_score_plot(subset, 'active')
+
+authors = subset.drop_duplicates('author')[['author','author_count','active','mod','author_avg_score']]
 
 ##### print stats
 print('There are {} authorless comments'.format(len(df[df['author']=='[deleted]'])))
@@ -59,13 +63,12 @@ print('There are {} comments by AutoModerator'.format(len(df[df['author']=='Auto
 print('Comments by AutoModerator or without an author have been removed')
 print('There are {} unique authors'.format(len(subset['author'].unique())))
 print('{} authors made one comment'.format(len(subset[subset['author_count']==1])))
-print('There are {} moderators among the authors'.format(len(subset[subset['mod']==1]['author'])))
+print('There are {} moderators among the authors'.format(len(set(subset[subset['mod']==1]['author']))))
 
 
 #### comment histograms
-subset.drop_duplicates('author').author_count.hist()
-repeats.drop_duplicates('author').author_count.hist()
-subset[subset.groupby('author').author.transform(len) > 10].drop_duplicates('author').author_count.hist()
+subset.drop_duplicates('author')
+subset[subset['author_count'] > 10].drop_duplicates('author').author_count.hist()
 
 count = subset.groupby('author_count').count()['count']
 comment_counts = pd.DataFrame({'count':count.index,'freq':count,'relfreq':count/16000})
@@ -92,8 +95,7 @@ print(df.iloc[-1]['body'])
 print('The highest scoring comment is: \n')
 print(df.iloc[0]['body'])
 
-subset = df[df.author != '[deleted]']
-subset = subset[subset.author != 'AutoModerator']
+
 repeats = subset[subset.groupby('author').author.transform(len) > 1]
 
 print('There appears to be no correlation between author comment frequency and score')
@@ -116,33 +118,27 @@ for name in top:
 
 
 
-### looking at mod comments
+### desc stats by group
+def comment_score_stats_table(df):
+    desc_stats = pd.DataFrame({'total':df.score.describe()})
+    desc_stats['not_deleted'] = df[df['author']!='[deleted]'].score.describe()
+    desc_stats['deleted'] = df[df['author']=='[deleted]'].score.describe()
+    desc_stats['mods'] = df[df['mod']==1].score.describe()
+    desc_stats['non_mods'] = df[-df['mod']==0].score.describe()
+    desc_stats['active(>10)'] = df[df['active']==1].score.describe()
+    desc_stats['inactive'] = df[df['active']==0].score.describe()
+    stats = desc_stats.T
+    stats['prop'] = stats['count']/df.shape[0]
+    return stats
+stats = comment_score_stats_table(subset)
+stats
 
-mod_comments = repeats[repeats['author'].isin(mods)]
 
-print('There appears to be no correlation between author comment \
-frequency and score for moderators either')
-mod_comments.plot(y='author_count',x='score',kind='scatter')
-
-print('Moderators do not appear to be prolific authors')
-mod_comments.drop_duplicates('author').author_count.hist()
+stats.to_csv('score_by_group.csv')
 
 
-
-repeats10 = subset[subset.groupby('author').author.transform(len) > 9]
-repeats10 = repeats10[repeats10['score'] < 201]
-repeats10.plot(x='rank',y='score',kind='scatter')
-
-desc_stats = pd.DataFrame(df.score.describe())
-desc_stats['not_deleted'] = df[df['author']!='[deleted]'].score.describe()
-desc_stats['deleted'] = df[df['author']=='[deleted]'].score.describe()
-desc_stats['mods'] = df[df['author'].isin(mods)].score.describe()
-desc_stats['non-mods'] = df[-df['author'].isin(mods)].score.describe()
-desc_stats.T
 
 #### desc stats by author type
-
-mods['tokens']=mods['body'].apply(lambda x: stopless_stems(x))
 
 
 texts = [text for text in df.head(100)['body']]
@@ -210,13 +206,14 @@ EXAMPLE REMOVED PROPER NOUNS, I HAVE NOT
 
 '''text is a list of sidebar revisions returns from prep_texts'''
 #tokenized_text = [tokenize_and_stem(text) for text in texts] #tokenize
-tokenized_text = [tokenize(text) for text in topdf['body']] #tokenize
+tokenized_text = [tokenize(text) for text in active['body']] #tokenize
 stopless_texts = [[word for word in text if word not in stopwords] for text in tokenized_text] #remove stop words
 
-                 
-dictionary = corpora.Dictionary(stopless_texts) #create a Gensim dictionary from the texts
+
+texts = [text for text in df['tokens'].head()]                
+dictionary = corpora.Dictionary(texts) #create a Gensim dictionary from the texts
 dictionary.filter_extremes(no_below=20) #remove extremes (similar to the min/max df step used when creating the tf-idf matrix)
-corpus = [dictionary.doc2bow(text) for text in stopless_texts] #convert the dictionary to a bag of words corpus for reference
+corpus = [dictionary.doc2bow(text) for text in tokens] #convert the dictionary to a bag of words corpus for reference
 
 # run the model, set number of topics
 lda = models.LdaModel(corpus, num_topics=3, id2word=dictionary, update_every=5, chunksize=10000, passes=100)

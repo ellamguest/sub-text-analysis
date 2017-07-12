@@ -14,7 +14,7 @@ stemmer = snowball.SnowballStemmer("english")
 stop = stopwords.words('english')
                       
 def stopless_stems(text):
-    text = re.sub('[^A-Za-z0-9]+', ' ', text)
+    text = re.sub('[^A-Za-z0-9]+', ' ', text).strip(' ')
     tokens = [word.lower() for word in text.split(' ')]
     contractionless = [term for term in tokens if term not in contractions]
     stems = [stemmer.stem(t) for t in contractionless]
