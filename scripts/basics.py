@@ -10,34 +10,13 @@ import nltk
 import re
 from gensim import corpora, models
 import matplotlib.pyplot as plt
-import scipy as sp
-from process_text import *
 
-# import data and update manage variables
-def prep_df():
-    #df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/raw-data/td_comments_2017_05.csv')
-    df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/raw-data/td_full_comments_2017_05.csv')
-    df['time'] = pd.to_datetime(df['created_utc'], unit='s')
-    df.sort_values('time', inplace=True)
-    df['rank'] = df.groupby('author')['time'].rank()
-    df['text_len'] = df['body'].map(lambda x:len(str(x)))
-    df['author_count'] = df['author'].map(
-            df.groupby('author').count()['time'])
-    df['author_avg_score'] = df['author'].map(
-            df.groupby('author').mean()['score'])
-    df['active'] = df.author_count.apply(lambda x: 1 if x > 10 else 0)
-    
-    mods = pd.read_csv('/Users/emg/Programming/GitHub/mod-timelines/moding-data/td/master.csv')
-    df['mod']=df.author.isin(mods['name'].unique()).map({False:0,True:1})
-    df['tokens']=df['body'].apply(lambda x: stopless_stems(x))
-    return df
-
-df = prep_df()
-df.to_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/td_full_comments_2017_05.csv')
-
-# create subset by removing inappropraite authors
-subset = df[df.author != '[deleted]']
-subset = subset[subset.author != 'AutoModerator']
+# tidy df created by process_text.py
+sample = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/td_sample_comments_2017_05.csv')
+df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/td_full_comments_2017_05.csv',
+                 index_col=0)
+df['time'] = pd.to_datetime(df['created_utc'], unit='s')
+subset = df[-df.author.isin(['[deleted]', 'AutoModerator'])]
 
 def author_count_score_plot(df, group):
     plt.scatter(x=df['score'], y=df['author_count'], c=df[group])
@@ -96,7 +75,7 @@ print('The highest scoring comment is: \n')
 print(df.iloc[0]['body'])
 
 
-repeats = subset[subset.groupby('author').author.transform(len) > 1]
+
 
 print('There appears to be no correlation between author comment frequency and score')
 
@@ -135,6 +114,29 @@ stats
 
 
 stats.to_csv('score_by_group.csv')
+
+
+##### looking at author counts
+sample_a_counts = sample.drop_duplicates('author').groupby('author_count').count()['time']
+full_a_counts = df.drop_duplicates('author').groupby('author_count').count()['time']
+
+
+#### TEXT LENGTH BY SCORE
+subset.plot('text_len', 'score', kind='scatter')
+
+x = subset['text_len']
+y = subset['score']
+plt.scatter(x, y)
+plt.xlabel('Comment length (characters)'), plt.ylabel('Comment Score')
+plt.title('Comment score by length')
+plt.xlim(xmin=0), plt.ylim(ymin=0)
+
+
+
+
+
+
+
 
 
 
