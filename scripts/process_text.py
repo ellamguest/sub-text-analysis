@@ -40,8 +40,8 @@ def prep_df():
     #df['tokens']=df['body'].apply(lambda x: stopless_stems(x))
     return df
 
-df = prep_df()
-df.to_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/td_full_comments_2017_05.csv')
+#df = prep_df()
+#df.to_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/td_full_comments_2017_05.csv')
 
 
 contractions = { 
