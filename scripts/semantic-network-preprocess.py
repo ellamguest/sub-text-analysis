@@ -14,12 +14,6 @@ from itertools import groupby
 from textblob import TextBlob
 import matplotlib.pyplot as plt
 
-#### td sample
-#sample = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/td_sample_comments_2017_05.csv')
-
-#### td full
-#df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/td_full_comments_2017_05.csv')
-
 ######### text pre-processing functions
 
 def check_rule(text):
@@ -76,12 +70,6 @@ def get_df(sub):
     return df
 
 
-td = get_df('td')
-cmv = get_df('cmv')
-
-td = subset_comments(td)
-cmv = subset_comments(cmv)
-
 ############## get breakdown n grams
 ###### m = document x n gram matrix
 ###### freq = frew dist of n grams
@@ -111,32 +99,27 @@ def ngrams_by_comment(subset, ngram_range=(1, 2), min_df=100):
     
     return m, freq, cm
 
-m, freq, cm = ngrams_by_comment(subset, ngram_range=(1,1), min_df=100)
+#m, freq, cm = ngrams_by_comment(subset, ngram_range=(1,1), min_df=100)
 
-cm.to_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/cmv_word_co-matrix.csv')
+#cm.to_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/cmv_word_co-matrix.csv')
 
 
 ############# to select for pos types
-def pos_tags(m):
-    tags = nltk.pos_tag(m.columns)
-    
-    pos = list(list(zip(*tags))[1])
-    pos.sort()
-    
-    pos_freq = {}
-    for key, group in groupby(pos):
-        pos_freq[key] = len(list(group)) 
-    
-    return tags, pos, pos_freq
 
-tags, pos, pos_freq = pos_tags(m)
-pos_freq
-
-
-
-
-
-
+#def pos_tags(m):
+#    tags = nltk.pos_tag(m.columns)
+#    
+#    pos = list(list(zip(*tags))[1])
+#    pos.sort()
+#    
+#    pos_freq = {}
+#    for key, group in groupby(pos):
+#        pos_freq[key] = len(list(group)) 
+#    
+#    return tags, pos, pos_freq
+#
+#tags, pos, pos_freq = pos_tags(m)
+#pos_freq
 
 ############ plots
 def plot(df, x, y, unit_name):
@@ -144,12 +127,8 @@ def plot(df, x, y, unit_name):
     plt.xlabel(x), plt.ylabel(y)
     plt.title('{} {} by {}'.format(unit_name, x,y))
 
-plot(subset, 'polarity', 'score')
-plot(subset, 'polarity','subjectivity')
-plot(subset, 'text_len','score')
+#plot(subset, 'polarity', 'score')
 
-non1 = subset[subset['score'] != 1]
-plot(non1, 'text_len','score')
 
 
 ############# basic stats
@@ -163,27 +142,24 @@ def stats_table(df):
         table[col] = df[col].describe()
     return table
 
-table = stats_table(subset)
-table
-
 
 ####### slangsd
 
-slangsd = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/SlangSD/SlangSD.csv', sep='\t', names=['slang','sentiment'])
-s = pd.Series
-
-slangsd['sent'] = slangsd.sentiment.apply(lambda x: x/2)
-slang_dict = slangsd[['slang','sent']].set_index('slang').to_dict()
-
-s = pd.Series(data=slangsd['sent'])
-s.index = slangsd['slang']
-s.to_dict()
-
-x = pd.DataFrame({'word':freq.index})
-x['sentiment'] = x['word'].apply(lambda x: sentiment(x))
-x['polarity'] = x['sentiment'].apply(lambda x:x[0])
-x['subjectivity'] = x['sentiment'].apply(lambda x:x[1])
-
+#slangsd = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/SlangSD/SlangSD.csv', sep='\t', names=['slang','sentiment'])
+#s = pd.Series
+#
+#slangsd['sent'] = slangsd.sentiment.apply(lambda x: x/2)
+#slang_dict = slangsd[['slang','sent']].set_index('slang').to_dict()
+#
+#s = pd.Series(data=slangsd['sent'])
+#s.index = slangsd['slang']
+#s.to_dict()
+#
+#x = pd.DataFrame({'word':freq.index})
+#x['sentiment'] = x['word'].apply(lambda x: sentiment(x))
+#x['polarity'] = x['sentiment'].apply(lambda x:x[0])
+#x['subjectivity'] = x['sentiment'].apply(lambda x:x[1])
+#
 
 
 
@@ -194,55 +170,48 @@ cmv = get_df('cmv')
 td = subset_comments(td)
 cmv = subset_comments(cmv)
 
-
 tdm, tdfreq, tdcm = ngrams_by_comment(td, ngram_range=(1,1), min_df=100)
 
 cmvm, cmvfreq, cmvcm = ngrams_by_comment(cmv, ngram_range=(1,1), min_df=100)
 
-def word_sentiment(freq):
-    x = pd.DataFrame({'word':freq.index})
-    x['sentiment'] = x['word'].apply(lambda x: sentiment(x))
-    x['polarity'] = x['sentiment'].apply(lambda x:x[0])
-    x['subjectivity'] = x['sentiment'].apply(lambda x:x[1])
-    return x
+def word_df(freq_series):
+    df = pd.DataFrame({'word':freq_series.index, 'freq':freq_series})
+    df['sentiment'] = df['word'].apply(lambda x: sentiment(x))
+    df['polarity'] = df['sentiment'].apply(lambda x:x[0])
+    df['subjectivity'] = df['sentiment'].apply(lambda x:x[1])
+    df['relfreq'] = df['freq'].apply(lambda x: x/freq_series.sum())
+    return df
 
-tdsent = word_sentiment(tdfreq)
-cmvsent = word_sentiment(cmvfreq)
+tdwords, cmvwords = word_df(tdfreq), word_df(cmvfreq)
 
-
-tdsent.plot('polarity','subjectivity',kind='scatter')
-cmvsent.plot('polarity','subjectivity',kind='scatter')
-
-plot(tdsent, 'polarity','subjectivity', 'td word')
-plot(cmvsent, 'polarity','subjectivity', 'cmv word')
-
-overlap = []
-for word in list(tdsent['word']):
-    if word in list(cmvsent['word']):
-        overlap.append(word)
+overlap = tdwords.merge(cmvwords, how='inner', on='word')[['word',
+                       'freq_x','relfreq_x', 'freq_y','relfreq_y',  
+                       'polarity_y', 'subjectivity_y']]
+overlap.columns = ['word','freq_td','relfreq_td', 'freq_cmv','relfreq_cmv',
+                   'polarity', 'subjectivity']
         
 td_only = []
 for word in list(tdsent['word']):
     if word not in list(cmvsent['word']):
         td_only.append(word)
-        
-tdrelfreq = tdfreq.apply(lambda x: x/tdfreq.sum())
-tdrelfreq.plot(title='td word rel freq plot')
 
-cmvrelfreq = cmvfreq.apply(lambda x: x/cmvfreq.sum())
-cmvrelfreq.plot(title='cmv word rel freq plot')
 
-rf = []
-for word in overlap:
-    rf.append([tdrelfreq[word], cmvrelfreq[word]])
 
-plt.scatter(list(zip(*rf))[0], list(zip(*rf))[1])
-plt.xlabel('word rel freq in td')
-plt.ylabel('word rel freq in cmv')
-plt.title('relative word frequencies')
-plt.xlim(xmin=0), plt.ylim(ymin=0)
 
-for label, x, y in zip(overlap, list(zip(*rf))[0], list(zip(*rf))[1]):
+######## plots  
+def plot(df, x, y, unit_name, x_min=False, y_min=False):
+    plt.scatter(x=df[x], y=df[y])
+    plt.xlabel(x), plt.ylabel(y)
+    plt.title('{} {} by {}'.format(unit_name, x,y))  
+    if x_min==True:
+        plt.xlim(xmin=0) 
+    if y_min==True:
+        plt.ylim(ymin=0) 
+      
+
+plot(overlap, 'relfreq_td','relfreq_cmv', 'word', x_min=True, y_min=True)
+common = overlap[overlap['relfreq_td']>0.011]
+for label, x, y in zip(common.word, common.relfreq_td, common.relfreq_cmv):
     plt.annotate(
         label,
         xy=(x, y), xytext=(-20, 20),
@@ -250,17 +219,18 @@ for label, x, y in zip(overlap, list(zip(*rf))[0], list(zip(*rf))[1]):
         bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
         arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0'))
 
-tdnums = tdsent.set_index('word')
-tdnums['relfreq'] = tdrelfreq
-      
-cmvnums = cmvsent.set_index('word')
-cmvnums['relfreq'] = cmvrelfreq
 
-def plot(df, x, y, unit_name):
-    plt.scatter(x=df[x], y=df[y])
-    plt.xlabel(x), plt.ylabel(y)
-    plt.title('{} {} by {}'.format(unit_name, x,y))  
-    plt.ylim(ymin=0)    
+plot(tdwords, 'polarity','subjectivity', 'td word')
+plot(cmvwords, 'polarity','subjectivity', 'cmv word')   
        
 plot(tdnums, 'polarity', 'relfreq', 'td words')
 plot(cmvnums, 'polarity', 'relfreq', 'cmv words')
+
+tdnums['word'] = tdnums.index
+tdnums['word_length'] = tdnums['word'].apply(lambda x: len(x))
+
+cmvnums['word'] = cmvnums.index
+cmvnums['word_length'] = cmvnums['word'].apply(lambda x: len(x))
+
+plt.hist(tdnums['word_length'])
+plt.title('Hist of td word lengths')
