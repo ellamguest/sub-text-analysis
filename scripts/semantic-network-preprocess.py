@@ -52,27 +52,35 @@ def sentiment_variables(df):
 
 def subset_comments(df):
     subset = df[-df.author.isin(['AutoModerator', 'DeltaBot', '[deleted]'])]
-    subset = subset[-subset.body.isin(['[deleted]',''])]
+    subset = subset[-subset.body.isin(['[deleted]','', '∆'])]
+    subset = subset[subset['rule_comment'] == False]
     subset = subset[subset['rule_comment'] == False]
     return subset
 
 ############## prep df
-df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/raw-data/cmv_sample_comments_2017_06.csv')
-mods = pd.read_csv('/Users/emg/Programming/GitHub/mod-timelines/moding-data/cmv/master.csv')
-df['time'] = pd.to_datetime(df['created_utc'], unit='s')
-df = df.assign(
-        rule_comment = lambda df: df['body'].pipe(check_rule),
-        rank= lambda df: df.groupby('author')['time'].rank(),
-        text_len= lambda df: df['body'].apply(lambda x:len(str(x))),
-        author_count= lambda df: df['author'].map(
-        df.groupby('author').count()['time']),
-        mod = lambda df:df.author.isin(mods['name'].unique()).map({False:0,True:1}),
-        author_avg_score= lambda df: df['author'].map(
-        df.groupby('author').mean()['score']))
 
-df = sentiment_variables(df)
+def get_df(sub):
+    df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/raw-data/{}_sample_comments_2017_06.csv'.format(sub))
+    mods = pd.read_csv('/Users/emg/Programming/GitHub/mod-timelines/moding-data/{}/master.csv'.format(sub))
+    df['time'] = pd.to_datetime(df['created_utc'], unit='s')
+    df = df.assign(
+            rule_comment = lambda df: df['body'].pipe(check_rule),
+            rank= lambda df: df.groupby('author')['time'].rank(),
+            text_len= lambda df: df['body'].apply(lambda x:len(str(x))),
+            author_count= lambda df: df['author'].map(
+            df.groupby('author').count()['time']),
+            mod = lambda df:df.author.isin(mods['name'].unique()).map({False:0,True:1}),
+            author_avg_score= lambda df: df['author'].map(
+            df.groupby('author').mean()['score']))
+    df = sentiment_variables(df)
+    return df
 
-subset = subset_comments(df)
+
+td = get_df('td')
+cmv = get_df('cmv')
+
+td = subset_comments(td)
+cmv = subset_comments(cmv)
 
 ############## get breakdown n grams
 ###### m = document x n gram matrix
@@ -103,9 +111,10 @@ def ngrams_by_comment(subset, ngram_range=(1, 2), min_df=100):
     
     return m, freq, cm
 
-m, freq, cm = ngrams_by_comment(subset, ngram_range=(2,3), min_df=50)
+m, freq, cm = ngrams_by_comment(subset, ngram_range=(1,1), min_df=100)
 
 cm.to_csv('/Users/emg/Programming/GitHub/sub-text-analysis/tidy-data/cmv_word_co-matrix.csv')
+
 
 ############# to select for pos types
 def pos_tags(m):
@@ -130,10 +139,10 @@ pos_freq
 
 
 ############ plots
-def plot(df, x, y):
+def plot(df, x, y, unit_name):
     plt.scatter(x=df[x], y=df[y])
     plt.xlabel(x), plt.ylabel(y)
-    plt.title('comment {} by {}'.format(x,y))
+    plt.title('{} {} by {}'.format(unit_name, x,y))
 
 plot(subset, 'polarity', 'score')
 plot(subset, 'polarity','subjectivity')
@@ -158,30 +167,100 @@ table = stats_table(subset)
 table
 
 
-####### troubleshooting rule commnet removal
-def check_rule(text):
-    rules = ['&gt; Comment Rule', 'n&gt; Submission Rule',
-             'Removed, see comment rule',
-             'http://www.reddit.com/r/changemyview/wiki/rules'] 
-    for rule in rules:
-        if rule in text:
-            return True
-    else:
-        return False
+####### slangsd
 
-n = 1
-for text in df['body']:
-    if check_rule(text) == True:
-        print(text)
-        n+=1
-    
+slangsd = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/SlangSD/SlangSD.csv', sep='\t', names=['slang','sentiment'])
+s = pd.Series
 
-errors = []
-test = m[m['reddit changemyview wiki']==1]['reddit changemyview wiki']
-for i in test.index:
-    print(i)
-    errors.append(subset.iloc[i]['body'])
-    
-rule_test = []
-for error in errors:
-    rule_test.append(check_rule(error))
+slangsd['sent'] = slangsd.sentiment.apply(lambda x: x/2)
+slang_dict = slangsd[['slang','sent']].set_index('slang').to_dict()
+
+s = pd.Series(data=slangsd['sent'])
+s.index = slangsd['slang']
+s.to_dict()
+
+x = pd.DataFrame({'word':freq.index})
+x['sentiment'] = x['word'].apply(lambda x: sentiment(x))
+x['polarity'] = x['sentiment'].apply(lambda x:x[0])
+x['subjectivity'] = x['sentiment'].apply(lambda x:x[1])
+
+
+
+
+########## comparing td and cmv
+td = get_df('td')
+cmv = get_df('cmv')
+
+td = subset_comments(td)
+cmv = subset_comments(cmv)
+
+
+tdm, tdfreq, tdcm = ngrams_by_comment(td, ngram_range=(1,1), min_df=100)
+
+cmvm, cmvfreq, cmvcm = ngrams_by_comment(cmv, ngram_range=(1,1), min_df=100)
+
+def word_sentiment(freq):
+    x = pd.DataFrame({'word':freq.index})
+    x['sentiment'] = x['word'].apply(lambda x: sentiment(x))
+    x['polarity'] = x['sentiment'].apply(lambda x:x[0])
+    x['subjectivity'] = x['sentiment'].apply(lambda x:x[1])
+    return x
+
+tdsent = word_sentiment(tdfreq)
+cmvsent = word_sentiment(cmvfreq)
+
+
+tdsent.plot('polarity','subjectivity',kind='scatter')
+cmvsent.plot('polarity','subjectivity',kind='scatter')
+
+plot(tdsent, 'polarity','subjectivity', 'td word')
+plot(cmvsent, 'polarity','subjectivity', 'cmv word')
+
+overlap = []
+for word in list(tdsent['word']):
+    if word in list(cmvsent['word']):
+        overlap.append(word)
+        
+td_only = []
+for word in list(tdsent['word']):
+    if word not in list(cmvsent['word']):
+        td_only.append(word)
+        
+tdrelfreq = tdfreq.apply(lambda x: x/tdfreq.sum())
+tdrelfreq.plot(title='td word rel freq plot')
+
+cmvrelfreq = cmvfreq.apply(lambda x: x/cmvfreq.sum())
+cmvrelfreq.plot(title='cmv word rel freq plot')
+
+rf = []
+for word in overlap:
+    rf.append([tdrelfreq[word], cmvrelfreq[word]])
+
+plt.scatter(list(zip(*rf))[0], list(zip(*rf))[1])
+plt.xlabel('word rel freq in td')
+plt.ylabel('word rel freq in cmv')
+plt.title('relative word frequencies')
+plt.xlim(xmin=0), plt.ylim(ymin=0)
+
+for label, x, y in zip(overlap, list(zip(*rf))[0], list(zip(*rf))[1]):
+    plt.annotate(
+        label,
+        xy=(x, y), xytext=(-20, 20),
+        textcoords='offset points', ha='right', va='bottom',
+        bbox=dict(boxstyle='round,pad=0.5', fc='yellow', alpha=0.5),
+        arrowprops=dict(arrowstyle = '->', connectionstyle='arc3,rad=0'))
+
+tdnums = tdsent.set_index('word')
+tdnums['relfreq'] = tdrelfreq
+      
+cmvnums = cmvsent.set_index('word')
+cmvnums['relfreq'] = cmvrelfreq
+
+def plot(df, x, y, unit_name):
+    plt.scatter(x=df[x], y=df[y])
+    plt.xlabel(x), plt.ylabel(y)
+    plt.title('{} {} by {}'.format(unit_name, x,y))  
+    plt.ylim(ymin=0)    
+       
+plot(tdnums, 'polarity', 'relfreq', 'td words')
+plot(cmvnums, 'polarity', 'relfreq', 'cmv words')
