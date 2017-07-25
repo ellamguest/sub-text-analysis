@@ -47,19 +47,19 @@ def prep_df(sub):
     df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/raw-data/{}_sample_comments_2017_06.csv'.format(sub))
     df = df[-df.author.isin(['AutoModerator', 'DeltaBot', '[deleted]'])]
     df = df[-df.body.isin(['[deleted]','', '∆'])]
-    mods = pd.read_csv('/Users/emg/Programming/GitHub/mod-timelines/moding-data/{}/master.csv'.format(sub))
+    #mods = pd.read_csv('/Users/emg/Programming/GitHub/mod-timelines/moding-data/{}/master.csv'.format(sub))
     df['time'] = pd.to_datetime(df['created_utc'], unit='s')
-    df = df.assign(
-            rule_comment = lambda df: df['body'].pipe(check_rule),
-            rank= lambda df: df.groupby('author')['time'].rank(),
-            text_len= lambda df: df['body'].apply(lambda x:len(str(x))),
-            author_count= lambda df: df['author'].map(
-            df.groupby('author').count()['time']),
-            mod = lambda df:df.author.isin(mods['name'].unique()).map({False:0,True:1}),
-            author_avg_score= lambda df: df['author'].map(
-            df.groupby('author').mean()['score']))
+    df['rule_comment'] = df['body'].apply(lambda x: check_rule(x)))
+    #df.assign(
+            #rank= lambda df: df.groupby('author')['time'].rank(),
+            #text_len= lambda df: df['body'].apply(lambda x:len(str(x))),
+            #author_count= lambda df: df['author'].map(
+            #df.groupby('author').count()['time']),
+            #mod = lambda df:df.author.isin(mods['name'].unique()).map({False:0,True:1}),
+            #author_avg_score= lambda df: df['author'].map(
+            #df.groupby('author').mean()['score']))
     df = df[df['rule_comment'] == False]
-    df = sentiment_variables(df)
+    #df = sentiment_variables(df)
     df['tokens'] = df['body'].apply(lambda x: tokenizer(x))
     df['token_length'] = df['tokens'].apply(lambda x: len(x))
     return df
