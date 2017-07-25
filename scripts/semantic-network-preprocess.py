@@ -49,7 +49,7 @@ def prep_df(sub):
     df = df[-df.body.isin(['[deleted]','', '∆'])]
     #mods = pd.read_csv('/Users/emg/Programming/GitHub/mod-timelines/moding-data/{}/master.csv'.format(sub))
     df['time'] = pd.to_datetime(df['created_utc'], unit='s')
-    df['rule_comment'] = df['body'].apply(lambda x: check_rule(x)))
+    df['rule_comment'] = df['body'].apply(lambda x: check_rule(x))
     #df.assign(
             #rank= lambda df: df.groupby('author')['time'].rank(),
             #text_len= lambda df: df['body'].apply(lambda x:len(str(x))),

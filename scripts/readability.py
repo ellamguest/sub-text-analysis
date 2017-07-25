@@ -42,12 +42,17 @@ def simple_text(text):
     simple_text = ' '.join(tokens)
     return simple_text
 
-def readability_df(df):
+def clean_text(df):
     texts = df[df['token_length']>0]['body']
-    texts = [re.sub(r"&gt;", "", text) for text in texts] # common bug should be >
+    texts = [re.sub(' +',' ', text) for text in texts]
+    texts = [re.sub(r"&gt;", "", text).strip() for text in texts] # common bug should be >
     texts = [re.sub(r"http\S+", "", text) for text in texts]
     texts = [re.sub('[^\w. ]','', text) for text in texts]
     texts = list(filter(None, texts))
+    return texts
+    
+def readability_df(df):
+    texts = clean_text(df)
     
     DIFFW = [textstat.difficult_words(text) for text in texts]
     FKG = [textstat.flesch_kincaid_grade(text) for text in texts]
