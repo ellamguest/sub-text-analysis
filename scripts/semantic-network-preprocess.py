@@ -26,6 +26,7 @@ def check_rule(text):
         return False
     
 def tokenizer(text):
+    text = re.sub(r"http\S+", "", text) #remove urls
     text = re.sub('[^A-Za-z0-9]+', ' ', text).strip(' ')
     text = re.findall('[a-zA-Z]{3,}', text)
     tokens = [word.lower() for word in text]

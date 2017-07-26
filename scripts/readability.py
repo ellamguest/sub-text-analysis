@@ -8,102 +8,168 @@ Created on Tue Jul 25 09:36:35 2017
 
 import pandas as pd
 import re
-from semantic-network-preprocess import check_rule, sentiment_variables, tokenizer
 from textstat.textstat import textstat
+import matplotlib.pyplot as plt
+import string
+import pkg_resources
+import math
+import numpy as np
 
-sub = 'cmv'
-
-def prep_df(sub):
+def check_rule(text):
+    rules = ['&gt; Comment Rule', 'n&gt; Submission Rule',
+             'Removed, see comment rule',
+             'http://www.reddit.com/r/changemyview/wiki/rules'] 
+    for rule in rules:
+        if rule in text:
+            return True
+    else:
+        return False
+    
+def basic_df(sub):
     df = pd.read_csv('/Users/emg/Programming/GitHub/sub-text-analysis/raw-data/{}_sample_comments_2017_06.csv'.format(sub))
     df = df[-df.author.isin(['AutoModerator', 'DeltaBot', '[deleted]'])]
     df = df[-df.body.isin(['[deleted]','', '∆'])]
-    mods = pd.read_csv('/Users/emg/Programming/GitHub/mod-timelines/moding-data/{}/master.csv'.format(sub))
-    df['time'] = pd.to_datetime(df['created_utc'], unit='s')
-    df = df.assign(
-            rule_comment = df['body'].apply(lambda x: check_rule(x)),
-            rank= lambda df: df.groupby('author')['time'].rank(),
-            text_len= lambda df: df['body'].apply(lambda x:len(str(x))),
-            author_count= lambda df: df['author'].map(
-            df.groupby('author').count()['time']),
-            mod = lambda df:df.author.isin(mods['name'].unique()).map({False:0,True:1}),
-            author_avg_score= lambda df: df['author'].map(
-            df.groupby('author').mean()['score']))
+    df['rule_comment'] = df['body'].apply(lambda x: check_rule(x))
     df = df[df['rule_comment'] == False]
-    df = sentiment_variables(df)
-    df['tokens'] = df['body'].apply(lambda x: tokenizer(x))
-    df['token_length'] = df['tokens'].apply(lambda x: len(x))
     return df
 
-def simple_text(text):
-    text = re.sub(r"http\S+", "", text) #remove complete urls
+def clean_text(text):
+    text = re.sub(r"&gt;", "", text).strip() # common bug should be >
+    text = re.sub(r"http\S+", "", text) #remove all urls
+    text = re.sub(r"#\S+", "", text) #removing all urls - lack of spaces messes w/ readabilty scores 
+    text = re.sub(r"(haha)\S+", "", text.lower()) #remove any number of hahas
+    text = re.sub(' +',' ', text)
+    text = re.sub('[^\w. ]','', text)
     text = re.sub('[^A-Za-z0-9]+', ' ', text).strip(' ')
-    text = re.findall('[a-zA-Z]{3,}', text)
-    tokens = [word.lower() for word in text]
-    simple_text = ' '.join(tokens)
-    return simple_text
+    return text
 
-def clean_text(df):
-    texts = df[df['token_length']>0]['body']
-    texts = [re.sub(' +',' ', text) for text in texts]
-    texts = [re.sub(r"&gt;", "", text).strip() for text in texts] # common bug should be >
-    texts = [re.sub(r"http\S+", "", text) for text in texts]
-    texts = [re.sub('[^\w. ]','', text) for text in texts]
-    texts = list(filter(None, texts))
-    return texts
+def difficult_words_set(text):
+        text_list = text.split()
+        diff_words_set = set()
+        for value in text_list:
+            if value not in easy_word_set:
+                if textstat.syllable_count(value) > 1:
+                    if value not in diff_words_set:
+                        diff_words_set.add(value)
+        return diff_words_set
     
 def readability_df(df):
-    texts = clean_text(df)
+    texts = df['body'].apply(lambda x: clean_text(x))
+    texts = list(filter(None, texts))
     
     DIFFW = [textstat.difficult_words(text) for text in texts]
+    DIFFW_SET = [difficult_words_set(text) for text in texts]
+    DIFFW_new = [len(words) for words in DIFFW_SET]
     FKG = [textstat.flesch_kincaid_grade(text) for text in texts]
     FRE = [textstat.flesch_reading_ease(text) for text in texts]
     
     readability_df = pd.DataFrame({'text':texts,'DIFFW':DIFFW,
+                                   'DIFFW_SET':DIFFW_SET, 'DIFFW_new':DIFFW_new,
                                    'FKG':FKG,'FRE':FRE,})
     
     readability_df['FRE_level'] = pd.cut(FRE, 
-                  bins = [-1000, 0, 30, 50, 60, 70, 80, 90, 100, 1000],
+                  bins = [-2000, 0, 30, 50, 60, 70, 80, 90, 100, 2000],
                   labels=['above college grad', 'college grad', 
                           'college student', '10-12th grade',
                            '8-9th grade', '7th grade', 
                            '6th grade', '5th grade',
                            'lower than 5th grade'])
+    readability_df['num_words'] = readability_df['text'].apply(lambda x: len(x.split(' ')))
+    readability_df['rel_diffw'] = readability_df['num_words']/readability_df['DIFFW']
+    readability_df['rel_diffw'].replace(np.inf, np.nan, inplace=True)
+    
     return readability_df
 
-df = prep_df('td')
+def plot(df, x, y, unit_name):
+    plt.scatter(x=df[x], y=df[y])
+    plt.xlabel(x), plt.ylabel(y)
+    plt.title('{} {} by {}'.format(unit_name, x,y)) 
+
+
+sub = 'td'
+df = basic_df(sub)
+read = readability_df(df)
+td_read = read
+long = read.ix[read['num_words']>=10]
+short = read.ix[read['num_words']<10]
+
+short.ix[short['FKG']<0][['text','FKG','num_words']]
+
+
+
+plot(read, 'FRE', 'FKG', '{} comment'.format(sub))
+plot(read, 'FRE', 'rel_diffw', '{} comment'.format(sub))
+plot(read, 'num_words', 'DIFFW', '{} comment'.format(sub))
+plot(short, 'num_words', 'FKG', '{} short comments'.format(sub))
+
+
+
+
+sub = 'cmv'
+df = basic_df(sub)
 read = readability_df(df)
 
-read[read['FRE']>100]
 
 plot(read, 'FRE', 'FKG', '{} comment'.format(sub))
 plot(read, 'FRE', 'DIFFW', '{} comment'.format(sub))
+plot(read, 'FRE', 'rel_diffw', '{} comment'.format(sub))
+plot(read, 'num_words', 'DIFFW', '{} comment'.format(sub))
+plot(read, 'DIFFW_new', 'DIFFW', '{} comment'.format(sub))
 
-td_readability = readability_df(td)
+read['rel_diffw'].replace(np.inf, np.nan, inplace=True)
+read['log_rel_diffw'] = read['rel_diffw'].apply(lambda x: math.log(x))
+read['log_diffw'] = read['DIFFW_new'].apply(lambda x: math.log(x))
+plot(read, 'FRE','log_rel_diffw', sub)
 
-'''
-DIFFW =  number of difficult words
-FKG = flesch-kincaid grade level
-FRE = flesch reading ease #can be negative, affect by polysyllabic words
-SMOG = Simple Measure Of Gobbledygook #comments too short for SMOG
 
-FRE matrix
-100.00-90.00	5th grade	Very easy to read. Easily understood by an average 11-year-old student.
-90.0–80.0	6th grade	Easy to read. Conversational English for consumers.
-80.0–70.0	7th grade	Fairly easy to read.
-70.0–60.0	8th & 9th grade	Plain English. Easily understood by 13- to 15-year-old students.
-60.0–50.0	10th to 12th grade	Fairly difficult to read.
-50.0–30.0	College	Difficult to read.
-30.0–0.0	College Graduate
-'''
-text = re.sub(r'^https?:\/\/.*[\r\n]*', '', text, flags=re.MULTILINE)
+####### deconstructing DIFFW
+def syllable_count(self, text):
+        """
+        Function to calculate syllable words in a text.
+        I/P - a text
+        O/P - number of syllable words
+        """
+        count = 0
+        vowels = 'aeiouy'
+        text = text.lower()
+        exclude = list(string.punctuation)
+        text = "".join(x for x in text if x not in exclude)
 
-def avg_syllables_per_word(self, text):
-        syllable = self.syllable_count(text)
-        words = self.lexicon_count(text)
-        try:
-            ASPW = float(syllable)/float(words)
-            return round(ASPW, 1)
-        except:
-            print("Error(ASyPW): Number of words are zero, cannot divide")
-            return
+        if text is None:
+            return 0
+        elif len(text) == 0:
+            return 0
+        else:
+            if text[0] in vowels:
+                count += 1
+            for index in range(1, len(text)):
+                if text[index] in vowels and text[index-1] not in vowels:
+                    count += 1
+            if text.endswith('e'):
+                count -= 1
+            if text.endswith('le'):
+                count += 1
+            if count == 0:
+                count += 1
+            count = count - (0.1*count)
+            return count
+        
+easy_word_set = [line.rstrip() for line in open('/anaconda/envs/python3/lib/python3.4/site-packages/textstat/easy_words.txt', 'r')]       
+
+
+easy_word_set = set([ln.strip().decode('utf-8') for ln in pkg_resources.resource_stream('textstat', 'easy_words.txt')])
+        
+def difficult_words_list(text):
+        text_list = text.split()
+        diff_words_set = set()
+        for value in text_list:
+            if value not in easy_word_set:
+                if textstat.syllable_count(value) > 1:
+                    if value not in diff_words_set:
+                        diff_words_set.add(value)
+        return diff_words_set
+
+difficult_words_list(text)
+len(difficult_words_list(text)) == textstat.difficult_words(text)
+textstat.difficult_words(text)
 
