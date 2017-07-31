@@ -14,6 +14,7 @@ import string
 import pkg_resources
 import math
 import numpy as np
+from textstat_own import *
 
 def check_rule(text):
     rules = ['&gt; Comment Rule', 'n&gt; Submission Rule',
@@ -52,19 +53,18 @@ def difficult_words_set(text):
                     if value not in diff_words_set:
                         diff_words_set.add(value)
         return diff_words_set
-    
+
 def readability_df(df):
     texts = df['body'].apply(lambda x: clean_text(x))
     texts = list(filter(None, texts))
     
-    DIFFW = [textstat.difficult_words(text) for text in texts]
+    DIFFW = [difficult_words(text) for text in texts]
     DIFFW_SET = [difficult_words_set(text) for text in texts]
-    DIFFW_new = [len(words) for words in DIFFW_SET]
-    FKG = [textstat.flesch_kincaid_grade(text) for text in texts]
-    FRE = [textstat.flesch_reading_ease(text) for text in texts]
+    FKG = [flesch_kincaid_grade(text) for text in texts]
+    FRE = [flesch_reading_ease(text) for text in texts]
     
-    readability_df = pd.DataFrame({'text':texts,'DIFFW':DIFFW,
-                                   'DIFFW_SET':DIFFW_SET, 'DIFFW_new':DIFFW_new,
+    readability_df = pd.DataFrame({'body':df['body'],'text':texts,
+                                   'DIFFW':DIFFW, 'DIFFW_SET':DIFFW_SET,
                                    'FKG':FKG,'FRE':FRE,})
     
     readability_df['FRE_level'] = pd.cut(FRE, 
@@ -88,6 +88,7 @@ def plot(df, x, y, unit_name):
 
 sub = 'td'
 df = basic_df(sub)
+df = df.head(20)
 read = readability_df(df)
 td_read = read
 long = read.ix[read['num_words']>=10]
@@ -154,7 +155,7 @@ def syllable_count(self, text):
             count = count - (0.1*count)
             return count
         
-easy_word_set = [line.rstrip() for line in open('/anaconda/envs/python3/lib/python3.4/site-packages/textstat/easy_words.txt', 'r')]       
+easy_word_set = [line.rstrip() for line in open('/Users/emg/Programming/GitHub/sub-text-analysis/resources/easy_words.txt', 'r')]       
 
 
 easy_word_set = set([ln.strip().decode('utf-8') for ln in pkg_resources.resource_stream('textstat', 'easy_words.txt')])
