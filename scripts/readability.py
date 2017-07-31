@@ -8,11 +8,10 @@ Created on Tue Jul 25 09:36:35 2017
 
 import pandas as pd
 import re
-from textstat.textstat import textstat
 import matplotlib.pyplot as plt
-import string
-import pkg_resources
-import math
+#import string
+#import pkg_resources
+#import math
 import numpy as np
 from textstat_own import *
 
@@ -44,133 +43,108 @@ def clean_text(text):
     text = re.sub('[^A-Za-z0-9]+', ' ', text).strip(' ')
     return text
 
-def difficult_words_set(text):
-        text_list = text.split()
-        diff_words_set = set()
-        for value in text_list:
-            if value not in easy_word_set:
-                if textstat.syllable_count(value) > 1:
-                    if value not in diff_words_set:
-                        diff_words_set.add(value)
-        return diff_words_set
 
-def readability_df(df):
-    texts = df['body'].apply(lambda x: clean_text(x))
-    texts = list(filter(None, texts))
+def get_readability_measures(df):
+    df['text'] = df['body'].apply(lambda x: clean_text(x))
+    df = df.ix[-df['text'].isin([None, ''])].copy()
     
-    DIFFW = [difficult_words(text) for text in texts]
-    DIFFW_SET = [difficult_words_set(text) for text in texts]
-    FKG = [flesch_kincaid_grade(text) for text in texts]
-    FRE = [flesch_reading_ease(text) for text in texts]
-    
-    readability_df = pd.DataFrame({'body':df['body'],'text':texts,
-                                   'DIFFW':DIFFW, 'DIFFW_SET':DIFFW_SET,
-                                   'FKG':FKG,'FRE':FRE,})
-    
-    readability_df['FRE_level'] = pd.cut(FRE, 
-                  bins = [-2000, 0, 30, 50, 60, 70, 80, 90, 100, 2000],
-                  labels=['above college grad', 'college grad', 
-                          'college student', '10-12th grade',
-                           '8-9th grade', '7th grade', 
-                           '6th grade', '5th grade',
-                           'lower than 5th grade'])
-    readability_df['num_words'] = readability_df['text'].apply(lambda x: len(x.split(' ')))
-    readability_df['rel_diffw'] = readability_df['num_words']/readability_df['DIFFW']
-    readability_df['rel_diffw'].replace(np.inf, np.nan, inplace=True)
-    
-    return readability_df
+    df['DIFFW_SET'] = df['text'].apply(lambda x: difficult_words_set(x))
+    df['DIFFW'] = df['DIFFW_SET'].apply(lambda x: len(x))
+    df['FKG'] = df['text'].apply(lambda x: flesch_kincaid_grade(x))
+    df['FRE'] = df['text'].apply(lambda x: flesch_reading_ease(x))
+    df['ASL'] = df['text'].apply(lambda x: avg_sentence_length(x))
+    df['ASW'] = df['text'].apply(lambda x: avg_syllables_per_word(x))
+    df['num_words'] = df['text'].apply(lambda x: len(x.split(' ')))
+    df['rel_diffw'] = df['num_words']/df['DIFFW']
+
+    return df
 
 def plot(df, x, y, unit_name):
     plt.scatter(x=df[x], y=df[y])
     plt.xlabel(x), plt.ylabel(y)
     plt.title('{} {} by {}'.format(unit_name, x,y)) 
+    
+def colour_plot(df, x, y, unit_name, col_col):
+    plt.scatter(x=df[x], y=df[y], c=df[col_col])
+    plt.xlabel(x), plt.ylabel(y)
+    plt.title('{} {} by {}'.format(unit_name, x,y))
 
 
-sub = 'td'
-df = basic_df(sub)
-df = df.head(20)
-read = readability_df(df)
-td_read = read
-long = read.ix[read['num_words']>=10]
-short = read.ix[read['num_words']<10]
+df = basic_df('td')
+td_read = get_readability_measures(df)
 
-short.ix[short['FKG']<0][['text','FKG','num_words']]
-
-
-
-plot(read, 'FRE', 'FKG', '{} comment'.format(sub))
-plot(read, 'FRE', 'rel_diffw', '{} comment'.format(sub))
-plot(read, 'num_words', 'DIFFW', '{} comment'.format(sub))
-plot(short, 'num_words', 'FKG', '{} short comments'.format(sub))
+df = basic_df('cmv')
+cmv_df = df
+cmv_read = get_readability_measures(cmv_df)
 
 
 
-
-sub = 'cmv'
-df = basic_df(sub)
-read = readability_df(df)
-
-
-plot(read, 'FRE', 'FKG', '{} comment'.format(sub))
-plot(read, 'FRE', 'DIFFW', '{} comment'.format(sub))
-plot(read, 'FRE', 'rel_diffw', '{} comment'.format(sub))
-plot(read, 'num_words', 'DIFFW', '{} comment'.format(sub))
-plot(read, 'DIFFW_new', 'DIFFW', '{} comment'.format(sub))
-
-read['rel_diffw'].replace(np.inf, np.nan, inplace=True)
-read['log_rel_diffw'] = read['rel_diffw'].apply(lambda x: math.log(x))
-read['log_diffw'] = read['DIFFW_new'].apply(lambda x: math.log(x))
-plot(read, 'FRE','log_rel_diffw', sub)
+plot(td_read, 'FRE', 'FKG', 'td comment')
+plot(td_read, 'FRE', 'DIFFW', 'td comment')
+plot(td_read, 'FRE', 'rel_diffw', 'td comment')
+plot(td_read, 'num_words', 'DIFFW', 'td comment')
 
 
-####### deconstructing DIFFW
-def syllable_count(self, text):
-        """
-        Function to calculate syllable words in a text.
-        I/P - a text
-        O/P - number of syllable words
-        """
-        count = 0
-        vowels = 'aeiouy'
-        text = text.lower()
-        exclude = list(string.punctuation)
-        text = "".join(x for x in text if x not in exclude)
+colour_plot(td_read, 'FRE', 'FKG', '{} comment - colour = ASL'.format('td'), col_col='ASL')
+colour_plot(td_read, 'FRE', 'FKG', '{} comment - colour = ASW'.format('td'), col_col='ASW')
 
-        if text is None:
-            return 0
-        elif len(text) == 0:
-            return 0
-        else:
-            if text[0] in vowels:
-                count += 1
-            for index in range(1, len(text)):
-                if text[index] in vowels and text[index-1] not in vowels:
-                    count += 1
-            if text.endswith('e'):
-                count -= 1
-            if text.endswith('le'):
-                count += 1
-            if count == 0:
-                count += 1
-            count = count - (0.1*count)
-            return count
-        
-easy_word_set = [line.rstrip() for line in open('/Users/emg/Programming/GitHub/sub-text-analysis/resources/easy_words.txt', 'r')]       
+colour_plot(td_read, 'ASL', 'ASW', '{} comment - colour = FRE'.format('td'), col_col='FRE')
+colour_plot(td_read, 'ASL', 'ASW', '{} comment - colour = FKG'.format('td'), col_col='FKG')
+
+td_scored = td_read.ix[td_read['score']!=1].copy()
+plot(td_scored, 'num_words', 'score', 'td comment')
+plot(td_scored, 'FKG', 'score', 'td comment')
+plot(td_scored, 'FRE', 'score', 'td comment')
+
+colour_plot(td_read, 'ASL', 'ASW', 'td comment - colour = score', col_col='score')
 
 
-easy_word_set = set([ln.strip().decode('utf-8') for ln in pkg_resources.resource_stream('textstat', 'easy_words.txt')])
-        
-def difficult_words_list(text):
-        text_list = text.split()
-        diff_words_set = set()
-        for value in text_list:
-            if value not in easy_word_set:
-                if textstat.syllable_count(value) > 1:
-                    if value not in diff_words_set:
-                        diff_words_set.add(value)
-        return diff_words_set
+plot(cmv_read, 'FRE', 'FKG', '{} comment'.format('cmv'))
+plot(cmv_read, 'FRE', 'DIFFW', '{} comment'.format('cmv'))
+plot(cmv_read, 'FRE', 'rel_diffw', '{} comment'.format('cmv'))
+plot(cmv_read, 'num_words', 'DIFFW', '{} comment'.format('cmv'))
 
-difficult_words_list(text)
-len(difficult_words_list(text)) == textstat.difficult_words(text)
-textstat.difficult_words(text)
+colour_plot(cmv_read, 'FRE', 'FKG', '{} comment - colour = ASL'.format('cmv'), col_col='ASL')
+colour_plot(cmv_read, 'FRE', 'FKG', '{} comment - colour = ASW'.format('cmv'), col_col='ASW')
+
+colour_plot(cmv_read, 'ASL', 'ASW', '{} comment - colour = FRE'.format('cmv'), col_col='FRE')
+colour_plot(cmv_read, 'ASL', 'ASW', '{} comment - colour = FKG'.format('cmv'), col_col='FKG')
+
+cmv_scored = cmv_read.ix[cmv_read['score']!=1].copy()
+plot(cmv_scored, 'num_words', 'score', 'cmv comment')
+plot(cmv_scored, 'FKG', 'score', 'cmv comment')
+plot(cmv_scored, 'FRE', 'score', 'cmv comment')
+
+## difficult word frequencies
+from itertools import groupby
+
+            
+x = td_read['DIFFW_SET'].iloc[0]
+
+## trying to get a way of measuring common terms
+def diff_word_freq(df):
+    words = []
+    for difficult_words in df['DIFFW_SET']:
+        words.extend(difficult_words)
+    words.sort()
+    freq = [(len(list(group)), key) for key, group in groupby(words)]
+    freq.sort()
+    
+    rev_freq = {}
+    for key, value in freq:
+        rev_freq[value] = key
+    return rev_freq
+
+def diff_word_count(diff_word_set, rev_freq):
+    n = 0
+    for word in diff_word_set:
+        n += rev_freq[word]
+    return n
+
+rev_freq = diff_word_freq(cmv_df)
+cmv_read['diff_weighted_count'] = cmv_read['DIFFW_SET'].apply(lambda x: diff_word_count(x, rev_freq))
+
+
+plot(cmv_read, 'diff_weighted_count', 'FKG', 'cmv comment')
+plot(cmv_read, 'DIFFW', 'FKG', 'cmv comment')
 

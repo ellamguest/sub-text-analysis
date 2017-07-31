@@ -62,7 +62,7 @@ def syllable_count(text):
             count += 1
         if count == 0:
             count += 1
-        count = count - (0.1*count)
+        count = count - (0.1*count) # why syllables 0.9 each not 1?
         return count
 
 def sentence_count(text):
@@ -80,7 +80,7 @@ def avg_sentence_length(text):
     lc = lexicon_count(text)
     sc = sentence_count(text)
     try:
-        ASL = float(lc/sc)
+        float(lc/sc)
         return round(lc/sc, 1)
     except:
         print("Error(ASL): Sentence Count is Zero, Cannot Divide")
@@ -132,20 +132,15 @@ def polysyllabcount(text):
             count += 1
     return count
 
-
 def difficult_words(text):
     text_list = text.split()
     diff_words_set = set()
     for value in text_list:
         if value not in easy_word_set:
-            print(value)
             if syllable_count(value) > 1:
                 if value not in diff_words_set:
                     diff_words_set.add(value)
     return len(diff_words_set)
-
-import pkg_resources
-easy_word_set1 = set([ln.strip() for ln in pkg_resources.resource_stream('textstat', 'easy_words.txt')])
 
 def difficult_words_set(text):
     text_list = text.split()
