@@ -8,30 +8,17 @@ Created on Tue Aug  1 11:56:51 2017
 
 ignored_states = np.seterr(divide='ignore')
 
-def n_words(text, removepunct=True):
-    """
-    Function to return total lexicon (words in lay terms) counts in a text
-    """
-    if removepunct:
-        text = ''.join(ch for ch in text if ch not in exclude)
-    count = len(text.split())
-    return count
-
-def n_syllables(text):
-    """
-    Function to calculate syllable words in a text.
-    I/P - a text
-    O/P - number of syllable words
-    """
+def counts(text):
     count = 0
     vowels = 'aeiouy'
     text = text.lower()
-    text = "".join(x for x in text if x not in exclude)
+    text = "".join(ch for ch in text if ch not in exclude)
+    n_words = len(text)
 
     if text is None:
-        return 0
+        count = 0
     elif len(text) == 0:
-        return 0
+        count = 0
     else:
         if text[0] in vowels:
             count += 1
@@ -45,61 +32,29 @@ def n_syllables(text):
         if count == 0:
             count += 1
         count = count - (0.1*count) # why syllables 0.9 each not 1?
-        return count
+    n_syllables = count
 
-def n_sentences(text):
-    """
-    Sentence count of a text
-    """
     ignoreCount = 0
     sentences = re.split(r' *[\.\?!][\'"\)\]]* *', text)
     for sentence in sentences:
-        if n_words(text) <= 2: # try to parameterize!
+        if n_words <= 2: # try to parameterize!
             ignoreCount = ignoreCount + 1
-    return max(1, len(sentences) - ignoreCount)
-
-def blah(text):
-        count = 0
-    vowels = 'aeiouy'
-    text = text.lower()
-    text = "".join(x for x in text if x not in exclude)
-
-    if text is None:
-        return 0
-    elif len(text) == 0:
-        return 0
-    else:
-        if text[0] in vowels:
-            count += 1
-        for index in range(1, len(text)):
-            if text[index] in vowels and text[index-1] not in vowels:
-                count += 1
-        if text.endswith('e'):
-            count -= 1
-        if text.endswith('le'):
-            count += 1
-        if count == 0:
-            count += 1
-        count = count - (0.1*count) # why syllables 0.9 each not 1?
-        return count
-    
-    word_text = ''.join(ch for ch in text if ch not in exclude)
-    n_words = len(word_text.split())
+    n_sentences =  max(1, len(sentences) - ignoreCount)
     
     
-    return n_words
+    return n_syllables, n_words, n_sentences
 
 
-df = basic_df('td').head(20)
+df = basic_df('td')
 df['text'] = df['body'].apply(lambda x: clean_text(x))
 df = df.ix[-df['text'].isin([None, ''])].copy()
 
 df['DIFFW_SET'] = df['text'].apply(lambda x: difficult_words_set(x))
+print('passed diff set')
 df['DIFFW'] = df['DIFFW_SET'].apply(lambda x: len(x))
 
-df['n_syllables'] = df['text'].apply(lambda x: n_syllables(x))
-df['n_words'] = df['text'].apply(lambda x: n_words(x))
-df['n_sentences'] = df['text'].apply(lambda x: n_sentences(x))
+df['n_syllables'], df['n_words'], df['n_sentences'] = list(zip(*
+                  df['text'].apply(lambda x: counts(x))))
 
 df['rel_diffw'] = np.divide(df['n_words'],df['DIFFW'])
 df['ASL'] = np.divide(df['n_words'], df['n_sentences'])

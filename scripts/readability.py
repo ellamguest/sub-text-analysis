@@ -8,12 +8,10 @@ Created on Tue Jul 25 09:36:35 2017
 
 import pandas as pd
 import re
-import matplotlib.pyplot as plt
-#import string
-#import pkg_resources
-#import math
+import string
 import numpy as np
-from textstat_own import *
+import matplotlib.pyplot as plt
+#from textstat_own import *
 
 def check_rule(text):
     rules = ['&gt; Comment Rule', 'n&gt; Submission Rule',
@@ -36,84 +34,134 @@ def basic_df(sub):
 def clean_text(text):
     text = re.sub(r"&gt;", "", text).strip() # common bug should be >
     text = re.sub(r"http\S+", "", text) #remove all urls
-    text = re.sub(r"#\S+", "", text) #removing all urls - lack of spaces messes w/ readabilty scores 
-    text = re.sub(r"(haha)\S+", "", text.lower()) #remove any number of hahas
+    text = re.sub(r"(haha)\S+", "", text) #remove any number of hahas
     text = re.sub(' +',' ', text)
-    text = re.sub('[^\w. ]','', text)
-    text = re.sub('[^A-Za-z0-9]+', ' ', text).strip(' ')
+    #text = re.sub('[^\w. ]','', text.lower())
+    #text = re.sub('[^A-Za-z0-9]+', ' ', text).strip(' ')
+    if re.search('[a-zA-Z]', text) == None:
+        text = ''
     return text
+
+
+exclude = list(string.punctuation)
+def counts(text):
+        #ignoreCount = 0
+    sentences = re.split(r'\n| *[\.\?!][\'"\)\]]* *', text)
+    n_sentences = len([s for s in sentences if s not in [None, '']])
+#    for sentence in sentences:
+#        if n_words <= 2: # try to parameterize!
+#            ignoreCount = ignoreCount + 1
+    #n_sentences =  max(1, len(sentences) - ignoreCount)
+    
+    count = 0
+    vowels = 'aeiouy'
+    text = text.lower()
+    text = "".join(ch for ch in text if ch not in exclude)
+    n_words = len(text.split(' '))
+
+    if text is None:
+        count = 0
+    elif len(text) == 0:
+        count = 0
+    else:
+        if text[0] in vowels:
+            count += 1
+        for index in range(1, len(text)):
+            if text[index] in vowels and text[index-1] not in vowels:
+                count += 1
+        if text.endswith('e'):
+            count -= 1
+        if text.endswith('le'):
+            count += 1
+        if count == 0:
+            count += 1
+        count = count - (0.1*count) # why syllables 0.9 each not 1?
+    n_syllables = count
+
+    return n_syllables, n_words, n_sentences
+
+easy_word_set = [line.rstrip() for line in open('/Users/emg/Programming/GitHub/sub-text-analysis/resources/easy_words.txt', 'r')]       
+def difficult_words_set(text):
+    text_list = text.split()
+    diff_words_set = set()
+    n_syllables = counts(text)[0]
+    for value in text_list:
+        if value not in easy_word_set:
+            if n_syllables > 1:
+                if value not in diff_words_set:
+                    diff_words_set.add(value)
+    return diff_words_set
 
 
 def get_readability_measures(df):
     df['text'] = df['body'].apply(lambda x: clean_text(x))
     df = df.ix[-df['text'].isin([None, ''])].copy()
     
-    df['DIFFW_SET'] = df['text'].apply(lambda x: difficult_words_set(x))
-    df['DIFFW'] = df['DIFFW_SET'].apply(lambda x: len(x))
-    df['FKG'] = df['text'].apply(lambda x: flesch_kincaid_grade(x))
-    df['FRE'] = df['text'].apply(lambda x: flesch_reading_ease(x))
-    df['ASL'] = df['text'].apply(lambda x: avg_sentence_length(x))
-    df['ASW'] = df['text'].apply(lambda x: avg_syllables_per_word(x))
-    df['num_words'] = df['text'].apply(lambda x: len(x.split(' ')))
-    df['rel_diffw'] = df['num_words']/df['DIFFW']
-
+    df['n_syllables'], df['n_words'], df['n_sentences'] = list(zip(*
+                      df['text'].apply(lambda x: counts(x))))
+    
+    df['ASL'] = np.divide(df['n_words'], df['n_sentences']) #gives error when dividing by 0
+    df['ASW'] = np.divide(df['n_syllables'], df['n_words'])
+    
+    df['FRE'] = 206.835 - (float(1.015) * df['ASL']) - (float(84.6) * df['ASW'])
+    df['FKG'] = (float(0.39) * df['ASL']) + (float(11.8) * df['ASW']) - 15.59
+      
     return df
 
-def plot(df, x, y, unit_name):
+def add_difficult_words(df):
+    '''separted from get_readibilty_measures because takes a while'''
+    print('Getting difficult words sets....')
+    df['DIFFW_SET'] = df['text'].apply(lambda x: difficult_words_set(x))
+    print('Done with difficult words sets....')
+    df['DIFFW'] = df['DIFFW_SET'].apply(lambda x: len(x))
+    df['rel_diffw'] = np.divide(df['n_words'],df['DIFFW'])
+    
+    return df
+    
+def plot(sub, df, x, y, col=None):
     plt.scatter(x=df[x], y=df[y])
     plt.xlabel(x), plt.ylabel(y)
-    plt.title('{} {} by {}'.format(unit_name, x,y)) 
+    if col != None:
+        print('{}'.format(col))
+        plt.title('{} {} by {} (colour = {})'.format(sub, x,y, col))
+    else:
+        print('no color')
+        plt.title('{} {} by {}'.format(sub, x,y)) 
     
-def colour_plot(df, x, y, unit_name, col_col):
-    plt.scatter(x=df[x], y=df[y], c=df[col_col])
+    
+def colour_plot(sub, df, x, y, col=None):
+    plt.scatter(x=df[x], y=df[y], c=df[col])
     plt.xlabel(x), plt.ylabel(y)
-    plt.title('{} {} by {}'.format(unit_name, x,y))
+    if col=None
+    plt.title('{} {} by {} (colour = {})'.format(sub, x,y, col))
+
+def double_plot(df1, df2, x, y):
+    plt.scatter(x=df1[x], y=df1[y], c='blue', alpha=0.25)
+    plt.scatter(x=df2[x], y=df2[y], c='red', alpha=0.25)
+    plt.xlabel(x), plt.ylabel(y)
+    plt.title('{} by {}'.format(x,y))
 
 
-df = basic_df('td')
-td_read = get_readability_measures(df)
+td_df = basic_df('td')
+td_read = get_readability_measures(td_df)
+td = add_difficult_words(td_read)
 
-df = basic_df('cmv')
-cmv_df = df
+td_outliers = [1522]
+
+
+cmv_df = basic_df('cmv')
 cmv_read = get_readability_measures(cmv_df)
+cmv = add_difficult_words(cmv_read)
+
+test = td_read.drop(1522)
 
 
-
-plot(td_read, 'FRE', 'FKG', 'td comment')
-plot(td_read, 'FRE', 'DIFFW', 'td comment')
-plot(td_read, 'FRE', 'rel_diffw', 'td comment')
-plot(td_read, 'num_words', 'DIFFW', 'td comment')
-
-
-colour_plot(td_read, 'FRE', 'FKG', '{} comment - colour = ASL'.format('td'), col_col='ASL')
-colour_plot(td_read, 'FRE', 'FKG', '{} comment - colour = ASW'.format('td'), col_col='ASW')
-
-colour_plot(td_read, 'ASL', 'ASW', '{} comment - colour = FRE'.format('td'), col_col='FRE')
-colour_plot(td_read, 'ASL', 'ASW', '{} comment - colour = FKG'.format('td'), col_col='FKG')
-
-td_scored = td_read.ix[td_read['score']!=1].copy()
-plot(td_scored, 'num_words', 'score', 'td comment')
-plot(td_scored, 'FKG', 'score', 'td comment')
-plot(td_scored, 'FRE', 'score', 'td comment')
-
-colour_plot(td_read, 'ASL', 'ASW', 'td comment - colour = score', col_col='score')
-
+plot('td', td, 'FRE', 'FKG', col='ASL') # trying to combine plot but not working
+colour_plot('td', td, 'FRE', 'FKG', col='ASL')
 
 plot(cmv_read, 'FRE', 'FKG', '{} comment'.format('cmv'))
-plot(cmv_read, 'FRE', 'DIFFW', '{} comment'.format('cmv'))
-plot(cmv_read, 'FRE', 'rel_diffw', '{} comment'.format('cmv'))
-plot(cmv_read, 'num_words', 'DIFFW', '{} comment'.format('cmv'))
 
-colour_plot(cmv_read, 'FRE', 'FKG', '{} comment - colour = ASL'.format('cmv'), col_col='ASL')
-colour_plot(cmv_read, 'FRE', 'FKG', '{} comment - colour = ASW'.format('cmv'), col_col='ASW')
-
-colour_plot(cmv_read, 'ASL', 'ASW', '{} comment - colour = FRE'.format('cmv'), col_col='FRE')
-colour_plot(cmv_read, 'ASL', 'ASW', '{} comment - colour = FKG'.format('cmv'), col_col='FKG')
-
-cmv_scored = cmv_read.ix[cmv_read['score']!=1].copy()
-plot(cmv_scored, 'num_words', 'score', 'cmv comment')
-plot(cmv_scored, 'FKG', 'score', 'cmv comment')
-plot(cmv_scored, 'FRE', 'score', 'cmv comment')
+colour_plot('TD', td, 'ASL', 'ASW', 'DIFFW')
 
 ## difficult word frequencies
 from itertools import groupby
