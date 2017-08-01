@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Aug  1 11:56:51 2017
+
+@author: emg
+"""
+
+ignored_states = np.seterr(divide='ignore')
+
+def n_words(text, removepunct=True):
+    """
+    Function to return total lexicon (words in lay terms) counts in a text
+    """
+    if removepunct:
+        text = ''.join(ch for ch in text if ch not in exclude)
+    count = len(text.split())
+    return count
+
+def n_syllables(text):
+    """
+    Function to calculate syllable words in a text.
+    I/P - a text
+    O/P - number of syllable words
+    """
+    count = 0
+    vowels = 'aeiouy'
+    text = text.lower()
+    text = "".join(x for x in text if x not in exclude)
+
+    if text is None:
+        return 0
+    elif len(text) == 0:
+        return 0
+    else:
+        if text[0] in vowels:
+            count += 1
+        for index in range(1, len(text)):
+            if text[index] in vowels and text[index-1] not in vowels:
+                count += 1
+        if text.endswith('e'):
+            count -= 1
+        if text.endswith('le'):
+            count += 1
+        if count == 0:
+            count += 1
+        count = count - (0.1*count) # why syllables 0.9 each not 1?
+        return count
+
+def n_sentences(text):
+    """
+    Sentence count of a text
+    """
+    ignoreCount = 0
+    sentences = re.split(r' *[\.\?!][\'"\)\]]* *', text)
+    for sentence in sentences:
+        if n_words(text) <= 2: # try to parameterize!
+            ignoreCount = ignoreCount + 1
+    return max(1, len(sentences) - ignoreCount)
+
+def blah(text):
+        count = 0
+    vowels = 'aeiouy'
+    text = text.lower()
+    text = "".join(x for x in text if x not in exclude)
+
+    if text is None:
+        return 0
+    elif len(text) == 0:
+        return 0
+    else:
+        if text[0] in vowels:
+            count += 1
+        for index in range(1, len(text)):
+            if text[index] in vowels and text[index-1] not in vowels:
+                count += 1
+        if text.endswith('e'):
+            count -= 1
+        if text.endswith('le'):
+            count += 1
+        if count == 0:
+            count += 1
+        count = count - (0.1*count) # why syllables 0.9 each not 1?
+        return count
+    
+    word_text = ''.join(ch for ch in text if ch not in exclude)
+    n_words = len(word_text.split())
+    
+    
+    return n_words
+
+
+df = basic_df('td').head(20)
+df['text'] = df['body'].apply(lambda x: clean_text(x))
+df = df.ix[-df['text'].isin([None, ''])].copy()
+
+df['DIFFW_SET'] = df['text'].apply(lambda x: difficult_words_set(x))
+df['DIFFW'] = df['DIFFW_SET'].apply(lambda x: len(x))
+
+df['n_syllables'] = df['text'].apply(lambda x: n_syllables(x))
+df['n_words'] = df['text'].apply(lambda x: n_words(x))
+df['n_sentences'] = df['text'].apply(lambda x: n_sentences(x))
+
+df['rel_diffw'] = np.divide(df['n_words'],df['DIFFW'])
+df['ASL'] = np.divide(df['n_words'], df['n_sentences'])
+df['ASW'] = np.divide(df['n_syllables'], df['n_words'])
+
+df['FRE'] = 206.835 - float(1.015) * df['ASL'] - float(84.6) * df['ASW']
+df['FKG'] = float(0.39) * df['ASL'] + float(11.8) * df['ASW'] - 15.59
+
+
+  
+  
+  
+df['FKG'] = df['text'].apply(lambda x: flesch_kincaid_grade(x))
+df['FRE'] = df['text'].apply(lambda x: flesch_reading_ease(x))
+df['ASL'] = df['text'].apply(lambda x: avg_sentence_length(x))
+df['ASW'] = df['text'].apply(lambda x: avg_syllables_per_word(x))
+df['num_words'] = df['text'].apply(lambda x: len(x.split(' ')))
+
