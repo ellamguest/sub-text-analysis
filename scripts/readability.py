@@ -32,26 +32,23 @@ def basic_df(sub):
     return df
 
 def clean_text(text):
-    text = re.sub(r"&gt;", "", text).strip() # common bug should be >
-    text = re.sub(r"http\S+", "", text) #remove all urls
-    text = re.sub(r"(haha)\S+", "", text) #remove any number of hahas
+    text = re.sub("&gt;|http\S+|(haha)\S+|  +", "", text).strip() # common bug should be >
     text = re.sub(' +',' ', text)
-    #text = re.sub('[^\w. ]','', text.lower())
-    #text = re.sub('[^A-Za-z0-9]+', ' ', text).strip(' ')
     if re.search('[a-zA-Z]', text) == None:
         text = ''
     return text
 
+def tokenizer(text):
+    text = re.sub(r"http\S+", "", text) #remove urls
+    text = re.sub('[^A-Za-z0-9]+', ' ', text).strip(' ')
+    text = re.findall('[a-zA-Z]{3,}', text)
+    tokens = [word.lower() for word in text]
+    return tokens
 
 exclude = list(string.punctuation)
 def counts(text):
-        #ignoreCount = 0
-    sentences = re.split(r'\n| *[\.\?!][\'"\)\]]* *', text)
+    sentences = re.split('\n|(?<=\w)[.!?]|\n',text) # split at end punctutation if preceded by alphanumeric
     n_sentences = len([s for s in sentences if s not in [None, '']])
-#    for sentence in sentences:
-#        if n_words <= 2: # try to parameterize!
-#            ignoreCount = ignoreCount + 1
-    #n_sentences =  max(1, len(sentences) - ignoreCount)
     
     count = 0
     vowels = 'aeiouy'
@@ -96,6 +93,7 @@ def difficult_words_set(text):
 def get_readability_measures(df):
     df['text'] = df['body'].apply(lambda x: clean_text(x))
     df = df.ix[-df['text'].isin([None, ''])].copy()
+    df['tokens'] = df['text'].apply(lambda x: tokenizer(x))
     
     df['n_syllables'], df['n_words'], df['n_sentences'] = list(zip(*
                       df['text'].apply(lambda x: counts(x))))
@@ -119,63 +117,51 @@ def add_difficult_words(df):
     return df
     
 def plot(sub, df, x, y, col=None):
-    plt.scatter(x=df[x], y=df[y])
-    plt.xlabel(x), plt.ylabel(y)
-    if col != None:
-        print('{}'.format(col))
-        plt.title('{} {} by {} (colour = {})'.format(sub, x,y, col))
-    else:
-        print('no color')
+    if col==None:
+        plt.scatter(x=df[x], y=df[y])
+        plt.xlabel(x), plt.ylabel(y)
         plt.title('{} {} by {}'.format(sub, x,y)) 
-    
-    
-def colour_plot(sub, df, x, y, col=None):
-    plt.scatter(x=df[x], y=df[y], c=df[col])
-    plt.xlabel(x), plt.ylabel(y)
-    if col=None
-    plt.title('{} {} by {} (colour = {})'.format(sub, x,y, col))
+    else:
+        sc = plt.scatter(x=df[x], y=df[y], c=df[col])
+        plt.colorbar(sc)
+        plt.xlabel(x), plt.ylabel(y)
+        plt.title('{} {} by {} (colour = {})'.format(sub, x,y, col))
 
-def double_plot(df1, df2, x, y):
-    plt.scatter(x=df1[x], y=df1[y], c='blue', alpha=0.25)
-    plt.scatter(x=df2[x], y=df2[y], c='red', alpha=0.25)
+
+def double_plot(df1, df2, x, y, cols=['blue','red']):
+    plt.scatter(x=df1[x], y=df1[y], c=cols[0], alpha=0.25)
+    plt.scatter(x=df2[x], y=df2[y], c=cols[1], alpha=0.25)
     plt.xlabel(x), plt.ylabel(y)
     plt.title('{} by {}'.format(x,y))
 
 
+df = basic_df('td').head(10)
 td_df = basic_df('td')
 td_read = get_readability_measures(td_df)
 td = add_difficult_words(td_read)
 
-td_outliers = [1522]
+plot('TD', td_read, 'FRE', 'FKG')
+plot('TD', td_read, 'FRE', 'FKG', col='ASW') # trying to combine plot but not working
 
+td_outliers = [1522] # comments with particularly non-standard syntax/punctuation
 
-cmv_df = basic_df('cmv')
+cmv_df = basic_df('cmv').head(50)
 cmv_read = get_readability_measures(cmv_df)
 cmv = add_difficult_words(cmv_read)
 
-test = td_read.drop(1522)
-
-
-plot('td', td, 'FRE', 'FKG', col='ASL') # trying to combine plot but not working
-colour_plot('td', td, 'FRE', 'FKG', col='ASL')
-
-plot(cmv_read, 'FRE', 'FKG', '{} comment'.format('cmv'))
-
-colour_plot('TD', td, 'ASL', 'ASW', 'DIFFW')
 
 ## difficult word frequencies
 from itertools import groupby
-
-            
+        
 x = td_read['DIFFW_SET'].iloc[0]
 
 ## trying to get a way of measuring common terms
-def diff_word_freq(df):
-    words = []
-    for difficult_words in df['DIFFW_SET']:
-        words.extend(difficult_words)
-    words.sort()
-    freq = [(len(list(group)), key) for key, group in groupby(words)]
+def word_freq(word_series):
+    all_words = []
+    for words in word_series:
+        all_words.extend(words)
+    all_words.sort()
+    freq = [(len(list(group)), key) for key, group in groupby(all_words)]
     freq.sort()
     
     rev_freq = {}
@@ -183,16 +169,18 @@ def diff_word_freq(df):
         rev_freq[value] = key
     return rev_freq
 
-def diff_word_count(diff_word_set, rev_freq):
+def freq_word_count(word_set, rev_freq):
     n = 0
-    for word in diff_word_set:
+    for word in word_set:
         n += rev_freq[word]
     return n
 
-rev_freq = diff_word_freq(cmv_df)
-cmv_read['diff_weighted_count'] = cmv_read['DIFFW_SET'].apply(lambda x: diff_word_count(x, rev_freq))
+rev_freq = word_freq(td_read['tokens'])
+td_read['weighted_count'] = td_read['tokens'].apply(lambda x: freq_word_count(x, rev_freq))
 
+td['diff_weighted_count'] = td['DIFFW_SET'].apply(lambda x: freq_word_count(x, rev_freq))
 
-plot(cmv_read, 'diff_weighted_count', 'FKG', 'cmv comment')
-plot(cmv_read, 'DIFFW', 'FKG', 'cmv comment')
+plot('TD', df, 'weighted_count', 'score')
+plot('TD', td, 'DIFFW', 'FKG')
+plot('TD', td_read, 'weighted_count', 'score', 'n_words')
 
